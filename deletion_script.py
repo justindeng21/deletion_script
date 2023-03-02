@@ -2,8 +2,8 @@ import csv
 import requests
 
 url = 'https://privacyapi.evidon.com/api/v3/siteNotice/'
-password = "Draven817678!"
-username = "justindeng555@gmail.com"
+password = ""
+username = ""
 
 
 # Object created to store noticeIDs, response code, and requestURL as private members
@@ -66,7 +66,7 @@ def deleteNotice(queue):
 
 def main():
     queue = parseCSV()
-
+    
     deleteNotice(queue)
 
 
