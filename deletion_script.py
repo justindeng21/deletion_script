@@ -63,11 +63,11 @@ def deleteNotice(queue):
 
     deleteNotice(failedDeletions)
 
-
+#int main
 def main():
     queue = parseCSV()
-    
     deleteNotice(queue)
+    return
 
 
 main()
