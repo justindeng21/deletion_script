@@ -1,3 +1,4 @@
+#libraries
 import csv 
 import requests
 from threading import Thread
@@ -12,8 +13,7 @@ filename = 'test.csv'
 
 
 
-#Parses CSV files and constructs a notice object to be stored in a dict with noticeID as the Key
-#O(n)
+#Parses CSV files and constructs a Notice object to be stored in a dict with noticeID as the Key
 def parseCSV():
     notices = {}
     with open(filename, newline='') as csvfile:
@@ -46,8 +46,7 @@ class Notice:
         return
     
     
-#Call Handlerss  
-
+#Object created to handle bulk requests
 class callHandeler:
 
     #Constructor
@@ -61,9 +60,9 @@ class callHandeler:
         return
     
 
-    #Makes a request given noticeID(string) as an input
+    # Private method that makes a single request given noticeID(string) as an input
     @staticmethod
-    def makeRequest(noticeID):
+    def __makeRequest(noticeID):
         try:
             requestURL = url + noticeID
             request = requests.get(requestURL, auth=(username,password))
@@ -72,10 +71,11 @@ class callHandeler:
         except requests.exceptions.ConnectionError as err:
             return "Connection Failed"
 
-    #passes noticeIDs into makeRequest() multiple times via a loop given an array of noticeIDs as an input
-    def makeRequestByArray(self,noticeIDs):
+    # Private method that makes multiple requests given an array of noticeIDs
+    # Request that return 200 will be removed from the list of noticeIDs
+    def __makeRequestByArray(self,noticeIDs):
         for i in noticeIDs:
-            response = self.makeRequest(i)
+            response = self.__makeRequest(i)
             self.responses[i] = response
             self.notices[i].setResponse(response)
             if response == 200:
@@ -83,7 +83,10 @@ class callHandeler:
 
             
 
-    #Creates n threads. Creates n subsets of the notice arrays to be passed into each thread whoose tagert function is makeRequestByArray()
+    # Public method that creates N threads and N subsets of noticeIDs
+    # The target function of each thread is the privaate method, __makeRequestByArray(noticeIDs)
+    # The args passed in will be a subset of the noticeIDs
+    # Recursive call to handle requests where the connection has failed
     def makeBulkRequest(self):
         print('bulk request attempt', 'Notices left:', len(self.noticeIDs))
         if len(self.noticeIDs) == 0:
@@ -93,7 +96,7 @@ class callHandeler:
         threads = []
         for i in range(self.nThreads):
             noticeSubset = self.noticeIDs[i::self.nThreads]
-            t = Thread(target=self.makeRequestByArray, args=(noticeSubset,))
+            t = Thread(target=self.__makeRequestByArray, args=(noticeSubset,))
             threads.append(t)
 
         [ t.start() for t in threads ]
@@ -115,8 +118,8 @@ class callHandeler:
 #Main function to be called
 def main():
     noticeDict = parseCSV()
-    calls = callHandeler(noticeDict,64)
-    calls.makeBulkRequest()
+    handler = callHandeler(noticeDict,64)
+    handler.makeBulkRequest()
 
 
 
