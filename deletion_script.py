@@ -5,8 +5,8 @@ from threading import Thread
 
 
 #Global params
-username = 'justindeng555@gmail.com'
-password = 'Draven817678!'
+username = ''
+password = ''
 url = 'https://privacyapi.evidon.com/api/v3/siteNotice/'
 filename = 'test.csv'
 
