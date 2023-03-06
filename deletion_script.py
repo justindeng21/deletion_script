@@ -2,6 +2,9 @@ import csv
 import requests
 from threading import Thread
 
+
+
+#Global params
 username = 'justindeng555@gmail.com'
 password = 'Draven817678!'
 url = 'https://privacyapi.evidon.com/api/v3/siteNotice/'
@@ -9,96 +12,112 @@ filename = 'test.csv'
 
 
 
-# Object created to store noticeIDs, response code, and requestURL as private members
-class Notice:
-    def __init__(self,noticeID):
-        self.noticeID = noticeID
-        self.response = None
-        self.requestURL = url+self.noticeID+'/delete'
-        return
-    
-    def getNoticeId(self):
-        return self.noticeID
-    
-    def getRequestURL(self):
-        return self.requestURL
-    
-    def setResponse(self,response):
-        self.response = response
-        return
-    
-    def getResponse(self):
-        return self.response
-    
-
-
-    
-
-# Parses CSV
-# Creates a Notice object for each row
-# Stores Notice object in a array
-# Returns array of notice objects
+#Parses CSV files and constructs a notice object to be stored in a dict with noticeID as the Key
+#O(n)
 def parseCSV():
-    notices = []
+    notices = {}
     with open(filename, newline='') as csvfile:
         reader = csv.reader(csvfile)
         for row in reader:
             newNotice = Notice(row[0])
-            notices.append(newNotice)
+            notices[row[0]] = newNotice
     return notices
 
-# Makes an API call to delete a notice given a single noticeID
-# Returns a response Code if there is not a connection error
-# If there is a connection error, then "Connection Failed"
-def deleteNotice(notice):
-    try:
-        request = requests.get(notice.getRequestURL(), auth=(username,password))
-        return request.status_code
+#Notice Object definition
+#Stores NoticeID and server response
+class Notice:
 
-    except requests.exceptions.ConnectionError as err:
-        return "Connection Failed"
+    #Constructor
+    def __init__(self,noticeID):
+        self.noticeID = noticeID
+        self.response = None
+        return
+    
+    #Getters
+    def getNoticeId(self):
+        return self.noticeID
+    
+    def getResponse(self):
+        return self.response
+
+    #Setters
+    def setResponse(self,response):
+        self.response = response
+        return
+    
+    
+#Call Handlerss  
+
+class callHandeler:
+
+    #Constructor
+    def __init__(self,noticeDict,nThreads):
+        self.notices = noticeDict
+        self.nThreads = nThreads
+        self.responses = {}
+        self.noticeIDs = list(self.notices.keys())
+
+        print(type(self.noticeIDs))
+        return
     
 
-# Makes multiple calls to deleteNotice() given an array of noticeIDs
-# Updates the private member, response, for each object.
-def deleteNoticesByArray(noticeArr,responses):
-    for notice in noticeArr:
-        res = deleteNotice(notice)
-        notice.setResponse(res)
-        responses[notice.getNoticeId()] = res
-    return responses
+    #Makes a request given noticeID(string) as an input
+    @staticmethod
+    def makeRequest(noticeID):
+        try:
+            requestURL = url + noticeID
+            request = requests.get(requestURL, auth=(username,password))
+            return request.status_code
+
+        except requests.exceptions.ConnectionError as err:
+            return "Connection Failed"
+
+    #passes noticeIDs into makeRequest() multiple times via a loop given an array of noticeIDs as an input
+    def makeRequestByArray(self,noticeIDs):
+        for i in noticeIDs:
+            response = self.makeRequest(i)
+            self.responses[i] = response
+            self.notices[i].setResponse(response)
+            if response == 200:
+                self.noticeIDs.remove(i)
+
+            
+
+    #Creates n threads. Creates n subsets of the notice arrays to be passed into each thread whoose tagert function is makeRequestByArray()
+    def makeBulkRequest(self):
+        print('bulk request attempt', 'Notices left:', len(self.noticeIDs))
+        if len(self.noticeIDs) == 0:
+            return
+        
+
+        threads = []
+        for i in range(self.nThreads):
+            noticeSubset = self.noticeIDs[i::self.nThreads]
+            t = Thread(target=self.makeRequestByArray, args=(noticeSubset,))
+            threads.append(t)
+
+        [ t.start() for t in threads ]
+        [ t.join() for t in threads ]
+
+
+        for i in self.responses:
+            print(self.responses[i])
+
+        self.makeBulkRequest()
+
+
+        
 
 
 
-# Creates N threads
-# Divides the notice array into multiple subset
-# Each thread is assigned a subset of Notices to delete
-def threadedDeletion(nThreads, noticeArr):
-    if len(noticeArr) == 0:
-        return
-    print('threadedDeletion Called.','notice count:',len(noticeArr))
-    threads = []
-    responses = {}
-    for i in range(nThreads):
-        noticeSubset = noticeArr[i::nThreads]
-        t = Thread(target=deleteNoticesByArray, args=(noticeSubset,responses))
-        threads.append(t)
+    
 
-    [ t.start() for t in threads ]
-    [ t.join() for t in threads ]
-
-    newQueue = []
-    for notice in noticeArr:
-        if notice.getResponse() != 200:
-            newQueue.append(notice)
-
-    threadedDeletion(64,newQueue)
-
-    return
-
+#Main function to be called
 def main():
-    queue = parseCSV()
-    threadedDeletion(64,queue)
+    noticeDict = parseCSV()
+    calls = callHandeler(noticeDict,64)
+    calls.makeBulkRequest()
+
 
 
 main()
