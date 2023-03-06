@@ -2,16 +2,17 @@
 import csv 
 import requests
 from threading import Thread
+import pprint
 
+pp = pprint.PrettyPrinter(indent=4)
 
 
 #Global params
-username = ''
-password = ''
-url = 'https://privacyapi.evidon.com/api/v3/siteNotice/'
+username = '-'
+password = '-'
 filename = 'test.csv'
-
-
+url = 'https://privacyapi.evidon.com/api/v3/siteNotice/'
+NumThreads = 64
 
 #Parses CSV files and constructs a Notice object to be stored in a dict with noticeID as the Key
 def parseCSV():
@@ -36,36 +37,33 @@ class Notice:
     #Getters
     def getNoticeId(self):
         return self.noticeID
-    
     def getResponse(self):
         return self.response
-
+    
     #Setters
     def setResponse(self,response):
         self.response = response
         return
     
-    
-#Object created to handle bulk requests
+#Object defined to handle bulk requests
 class callHandeler:
-
     #Constructor
     def __init__(self,noticeDict,nThreads):
         self.notices = noticeDict
         self.nThreads = nThreads
         self.responses = {}
         self.noticeIDs = list(self.notices.keys())
-
-        print(type(self.noticeIDs))
+        self.bulkAttempt = 0 
         return
     
-
     # Private method that makes a single request given noticeID(string) as an input
+    # This is also where can change the request to delete
     @staticmethod
     def __makeRequest(noticeID):
         try:
-            requestURL = url + noticeID
+            requestURL = url + noticeID +''
             request = requests.get(requestURL, auth=(username,password))
+            pp.pprint(request.text)
             return request.status_code
 
         except requests.exceptions.ConnectionError as err:
@@ -78,21 +76,22 @@ class callHandeler:
             response = self.__makeRequest(i)
             self.responses[i] = response
             self.notices[i].setResponse(response)
+
             if response == 200:
                 self.noticeIDs.remove(i)
-
-            
 
     # Public method that creates N threads and N subsets of noticeIDs
     # The target function of each thread is the privaate method, __makeRequestByArray(noticeIDs)
     # The args passed in will be a subset of the noticeIDs
-    # Recursive call to handle requests where the connection has failed
+    # Recursive call to handle requests where the connection has failed(i.e when __makeRequest does not return 200 to __makeRequestByArray and is not removed from self.noticeIDs) 
     def makeBulkRequest(self):
-        print('bulk request attempt', 'Notices left:', len(self.noticeIDs))
+        self.bulkAttempt +=1
+        print('bulk request attempt:',self.bulkAttempt , 'Notices left:', len(self.noticeIDs))
         if len(self.noticeIDs) == 0:
             return
+        if self.bulkAttempt == 3:
+            return
         
-
         threads = []
         for i in range(self.nThreads):
             noticeSubset = self.noticeIDs[i::self.nThreads]
@@ -102,24 +101,14 @@ class callHandeler:
         [ t.start() for t in threads ]
         [ t.join() for t in threads ]
 
-
-        for i in self.responses:
-            print(self.responses[i])
-
         self.makeBulkRequest()
 
 
-        
-
-
-
-    
-
 #Main function to be called
 def main():
-    noticeDict = parseCSV()
-    handler = callHandeler(noticeDict,64)
-    handler.makeBulkRequest()
+    noticeDict = parseCSV()                             #get Dict of notice objects
+    handler = callHandeler(noticeDict,NumThreads)       #passed into a new instance of a call handeler object
+    handler.makeBulkRequest()                           #makes a bulk request
 
 
 
